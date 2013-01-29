@@ -9,7 +9,7 @@
 // Import the interfaces
 #import "HelloWorldLayer.h"
 
-#include "Box2D.h"
+#import "B2DWrapper.h"
 
 // Needed to obtain the Navigation Controller
 #import "AppDelegate.h"
@@ -24,8 +24,7 @@ enum {
 
 @interface HelloWorldLayer()
 {
-    b2World *_world;
-    b2Body *_body;
+    B2DWorld *_world;
 }
 @end
 
@@ -46,99 +45,138 @@ enum {
 	return scene;
 }
 
-- (void)createBallAtPosition:(CGPoint)pt
+- (B2DBody*)createBallAtPosition:(CGPoint)pt
 {
+    float scale = arc4random_uniform(100)/100.0f + 0.25;
     CCSprite *ball = [CCSprite spriteWithFile:@"Ball.png" rect:CGRectMake(0, 0, 52, 52)];
     ball.position = ccp(pt.x, pt.y);
+    ball.scale = scale;
+    ball.userObject = [NSString stringWithFormat:@"Ball%.2f", scale];
     [self addChild:ball];
     
-    b2BodyDef ballBodyDef;
-    ballBodyDef.type = b2_dynamicBody;
-    ballBodyDef.position.Set(pt.x/PTM_RATIO, pt.y/PTM_RATIO);
+    B2DBodyDef ballBodyDef = B2DBodyDefInit();
+    ballBodyDef.type = B2D_dynamicBody;
+    ballBodyDef.position = B2DVec2Make(pt.x/PTM_RATIO, pt.y/PTM_RATIO);
     ballBodyDef.userData = (__bridge void*) ball;
-    _body = _world->CreateBody(&ballBodyDef);
     
-    float scale = arc4random_uniform(100)/100.0f;
-    ball.scale = scale;
+    B2DBody *body = [_world createBody:&ballBodyDef];
+
+    B2DCircleShape *circle = [[B2DCircleShape alloc] init];
+    circle.radius = (26.0*scale)/PTM_RATIO;
     
-    b2CircleShape circle;
-    circle.m_radius = (26.0*scale)/PTM_RATIO;
-    
-    b2FixtureDef ballShapeDef;
-    ballShapeDef.shape = &circle;
+    B2DFixtureDef ballShapeDef = B2DFixtureDefInit();
+    ballShapeDef.shape = circle;
     ballShapeDef.density = 1.0f;
     ballShapeDef.friction = 0.2f;
-    ballShapeDef.restitution = 0.8f;
-    _body->CreateFixture(&ballShapeDef);
+    ballShapeDef.restitution = 0.5f;
+    [body createFixture:ballShapeDef];
+    
+    return body;
+}
+
+- (B2DBody*)createBoxAtPosition:(CGPoint)pt
+{
+    float scale = arc4random_uniform(100)/100.0f + 0.25;
+    CCSprite *box = [CCSprite spriteWithFile:@"Box.png"];
+    box.position = ccp(pt.x, pt.y);
+    box.scale = scale;
+    box.userObject = [NSString stringWithFormat:@"Box%.2f", scale];
+    [self addChild:box];
+    
+    B2DBodyDef ballBodyDef = B2DBodyDefInit();
+    ballBodyDef.type = B2D_dynamicBody;
+    ballBodyDef.position = B2DVec2Make(pt.x/PTM_RATIO, pt.y/PTM_RATIO);
+    ballBodyDef.userData = (__bridge void*) box;
+    
+    B2DBody *body = [_world createBody:&ballBodyDef];
+    
+    B2DPolygonShape *boxShape = [[B2DPolygonShape alloc] init];
+    [boxShape setAsBoxWithHalfWidth:(25.0 * scale)/PTM_RATIO halfHeight:(25.0 * scale)/PTM_RATIO];
+    
+    B2DFixtureDef boxShapeDef = B2DFixtureDefInit();
+    boxShapeDef.shape = boxShape;
+    boxShapeDef.density = 1.0f;
+    boxShapeDef.friction = 0.2f;
+    boxShapeDef.restitution = 0.5f;
+    [body createFixture:boxShapeDef];
+    
+    return body;
 }
 
 -(id) init
 {
 	if( (self=[super init])) {
-#if defined __cplusplus
-        NSLog(@"C Plus Plus!");
-#endif
         CGSize winSize = [[CCDirector sharedDirector] winSize];
 
-        b2Vec2 gravity = b2Vec2(0.0f, -30.0f);
-        _world = new b2World(gravity);
+        B2DVec2 gravity = B2DVec2Make(0.0, -30.0f);
+        _world = [[B2DWorld alloc] initWithGravity:gravity];
         
-        b2BodyDef groundBodyDef;
-        groundBodyDef.position.Set(0, 0);
-        b2Body *groundBody = _world->CreateBody(&groundBodyDef);
+        B2DBodyDef groundBodyDef = B2DBodyDefInit();
+        groundBodyDef.position = B2DVec2Make(0, 0);
+        B2DBody *groundBody = [_world createBody:&groundBodyDef];
         
-        b2EdgeShape groundEdge;
-        b2FixtureDef boxShapeDef;
+        B2DEdgeShape *groundEdge = [[B2DEdgeShape alloc] init];
+        B2DFixtureDef boxShapeDef = B2DFixtureDefInit();
         
-        boxShapeDef.shape = &groundEdge;
+        boxShapeDef.shape = groundEdge;
         
-        groundEdge.Set(b2Vec2(0, 0), b2Vec2(winSize.width/PTM_RATIO, 0));
-        groundBody->CreateFixture(&boxShapeDef);
+        [groundEdge setVecA:B2DVec2Make(0, 0) andVecB:B2DVec2Make(winSize.width/PTM_RATIO, 0)];
+        [groundBody createFixture:boxShapeDef];
         
-        groundEdge.Set(b2Vec2(0,0), b2Vec2(0, winSize.height/PTM_RATIO));
-        groundBody->CreateFixture(&boxShapeDef);
+        [groundEdge setVecA:B2DVec2Make(0, 0) andVecB:B2DVec2Make(0, winSize.height/PTM_RATIO)];
+        [groundBody createFixture:boxShapeDef];
         
-        groundEdge.Set(b2Vec2(0, winSize.height/PTM_RATIO),
-                       b2Vec2(winSize.width/PTM_RATIO, winSize.height/PTM_RATIO));
-        groundBody->CreateFixture(&boxShapeDef);
+        [groundEdge setVecA:B2DVec2Make(0, winSize.height/PTM_RATIO) andVecB:B2DVec2Make(winSize.width/PTM_RATIO, winSize.height/PTM_RATIO)];
+        [groundBody createFixture:boxShapeDef];
         
-        groundEdge.Set(b2Vec2(winSize.width/PTM_RATIO,
-                              winSize.height/PTM_RATIO), b2Vec2(winSize.width/PTM_RATIO, 0));
-        groundBody->CreateFixture(&boxShapeDef);
-        
-        [self createBallAtPosition:ccp(100, 100)];
+        [groundEdge setVecA:B2DVec2Make(winSize.width/PTM_RATIO, winSize.height/PTM_RATIO) andVecB:B2DVec2Make(winSize.width/PTM_RATIO, 0)];
+        [groundBody createFixture:boxShapeDef];
+
+        [self createBoxAtPosition:ccp(100, 100)];
         
         [self schedule:@selector(tick:)];
         
         self.isAccelerometerEnabled = YES;
         self.isTouchEnabled = YES;
+        
+        B2DContactListener *listener = [[B2DContactListener alloc] init];
+        listener.beginContactBlock = ^(void *userData1, void *userData2) {
+            if (userData1 && userData2) {
+                CCSprite *body1 = (__bridge CCSprite*)userData1;
+                CCSprite *body2 = (__bridge CCSprite*)userData2;
+                NSLog(@"Begin contact with %@ & %@", body1.userObject, body2.userObject);
+            }
+        };
+        listener.endContactBlock = ^(void *userData1, void *userData2) {
+            if (userData1 && userData2) {
+                CCSprite *body1 = (__bridge CCSprite*)userData1;
+                CCSprite *body2 = (__bridge CCSprite*)userData2;
+                NSLog(@"End contact with %@ & %@", body1.userObject, body2.userObject);
+            }
+        };
+        [_world setContactListener:listener];
 	}
 	return self;
 }
 
 - (void)tick:(ccTime)dT
 {
-    _world->Step(dT, 10, 10);
-    for (b2Body *b = _world->GetBodyList(); b; b=b->GetNext()) {
-        if (b->GetUserData() != NULL) {
-            CCSprite *ballData = (__bridge CCSprite*)b->GetUserData();
-            ballData.position = ccp(b->GetPosition().x * PTM_RATIO, b->GetPosition().y * PTM_RATIO);
-            //ballData.rotation = -1 * CC_RADIANS_TO_DEGREES(b->GetAngle());
+    [_world stepWithDeltaTime:dT velocityIterations:10 positionIterations:10];
+    for (B2DBody *b in [_world bodyList]) {
+        if ([b userData]) {
+            CCSprite *ballData = (__bridge CCSprite*)[b userData];
+            B2DVec2 position = [b position];
+            ballData.position = ccp(position.x * PTM_RATIO, position.y * PTM_RATIO);
+            ballData.rotation = CC_RADIANS_TO_DEGREES([b angle]);
         }
     }
-}
-
-- (void)dealloc {
-    delete _world;
-    _body = NULL;
-    _world = NULL;
 }
 
 - (void)accelerometer:(UIAccelerometer *)accelerometer didAccelerate:(UIAcceleration *)acceleration {
     
     // Landscape left values
-    b2Vec2 gravity(acceleration.y * 15, -acceleration.x *15);
-    _world->SetGravity(gravity);
+    B2DVec2 gravity = B2DVec2Make(acceleration.y * 15, -acceleration.x * 15);
+    [_world setGravity:gravity];
 }
 
 - (void)ccTouchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
